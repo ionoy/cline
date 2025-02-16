@@ -98,6 +98,7 @@ export class Cline {
 	isInitialized = false
 	isAwaitingPlanResponse = false
 	didRespondToPlanAskBySwitchingMode = false
+	private vsCodeOpenFilesDetails: string = "";
 
 	// streaming
 	isWaitingForFirstChunk = false
@@ -3273,24 +3274,28 @@ export class Cline {
 		}
 	}
 
+	private removeFinalFileContent(text: string): string {
+		// Remove any <final_file_content> sections from previous messages
+		return text.replace(/<final_file_content[\s\S]*?<\/final_file_content>/g, '[omitted previous file content]');
+	}
+
 	async loadContext(userContent: UserContent, includeFileDetails: boolean = false) {
 		return await Promise.all([
-			// This is a temporary solution to dynamically load context mentions from tool results. It checks for the presence of tags that indicate that the tool was rejected and feedback was provided (see formatToolDeniedFeedback, attemptCompletion, executeCommand, and consecutiveMistakeCount >= 3) or "<answer>" (see askFollowupQuestion), we place all user generated content in these tags so they can effectively be used as markers for when we should parse mentions). However if we allow multiple tools responses in the future, we will need to parse mentions specifically within the user content tags.
-			// (Note: this caused the @/ import alias bug where file contents were being parsed as well, since v2 converted tool results to text blocks)
 			Promise.all(
 				userContent.map(async (block) => {
 					if (block.type === "text") {
-						// We need to ensure any user generated content is wrapped in one of these tags so that we know to parse mentions
-						// FIXME: Only parse text in between these tags instead of the entire text block which may contain other tool results. This is part of a larger issue where we shouldn't be using regex to parse mentions in the first place (ie for cases where file paths have spaces)
 						if (
 							block.text.includes("<feedback>") ||
 							block.text.includes("<answer>") ||
 							block.text.includes("<task>") ||
 							block.text.includes("<user_message>")
 						) {
+							// First parse mentions
+							const parsedText = await parseMentions(block.text, cwd, this.urlContentFetcher);
+							// Then remove any final_file_content sections
 							return {
 								...block,
-								text: await parseMentions(block.text, cwd, this.urlContentFetcher),
+								text: this.removeFinalFileContent(parsedText)
 							}
 						}
 					}
@@ -3341,6 +3346,14 @@ export class Cline {
 		} else {
 			details += "\n(No open tabs)"
 		}
+		
+		if (this.vsCodeOpenFilesDetails === details) {
+			details = "";
+		} else {
+			this.vsCodeOpenFilesDetails = details;
+		}
+		
+		details = "";
 
 		const busyTerminals = this.terminalManager.getTerminals(true)
 		const inactiveTerminals = this.terminalManager.getTerminals(false)
