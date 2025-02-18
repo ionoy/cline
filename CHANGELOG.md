@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.4.1
+
+### Patch Changes
+
+-   cc166f4: Improve Requesty provider integration
+
+    -   Adding Cline headers to API requests, to enable targeted optimizations
+    -   Read o3 reasoning effort from Cline config, not model name
+    -   Show token information in task header
+    -   Get total cost from response when available
+
+-   b7519a3: Add MCP Marketplace
+
 ## [3.4.0]
 
 -   Send current textfield contents as additional feedback when toggling from Plan to Act Mode, or when hitting 'Approve' button
@@ -8,6 +21,7 @@
 -   Add advanced configuration options for OpenAI Compatible (context window, max output, pricing, etc.)
 -   Add Alibaba Qwen 2.5 coder models, VL models, and DeepSeek-R1/V3 support
 -   Improve support for AWS Bedrock Profiles
+-   Fix Mistral provider support for non-codestral models
 -   Add advanced setting to disable browser tool
 -   Add advanced setting to set chromium executable path for browser tool
 
