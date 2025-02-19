@@ -1163,14 +1163,18 @@ export class Cline {
 			}
 		}
 
+		const debouncedLines = this.debounce(() => {
+			if (!didContinue) {
+				sendCommandOutput(result)
+			} else {
+				this.say("command_output", result)
+			}
+		}, 500);
+
 		let result = ""
 		process.on("line", (line) => {
 			result += line + "\n"
-			if (!didContinue) {
-				sendCommandOutput(line)
-			} else {
-				this.say("command_output", line)
-			}
+			debouncedLines()
 		})
 
 		let completed = false
@@ -1216,7 +1220,17 @@ export class Cline {
 				}\n\nYou will be updated on the terminal status and new output in the future.`,
 			]
 		}
+
+
 	}
+
+	debounce<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
+		let timeoutId: ReturnType<typeof setTimeout>;
+		return function(this: ThisParameterType<T>, ...args: Parameters<T>): void {
+		  clearTimeout(timeoutId);
+		  timeoutId = setTimeout(() => func.apply(this, args), delay);
+		};
+	  }
 
 	shouldAutoApproveTool(toolName: ToolUseName): boolean {
 		if (this.autoApprovalSettings.enabled) {

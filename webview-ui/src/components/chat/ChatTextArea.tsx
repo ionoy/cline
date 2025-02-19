@@ -669,7 +669,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			}, changeModeDelay)
 		}, [chatSettings.mode, showModelSelector, submitApiConfig, inputValue, selectedImages])
 
-		useShortcut("Meta+Shift+a", onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
+		useShortcut("Ctrl+Shift+Alt+a", onModeToggle, { disableTextInputs: false }) // important that we don't disable the text input here
 
 		const handleContextButtonClick = useCallback(() => {
 			if (textAreaDisabled) return
