@@ -2,6 +2,7 @@ import { ApiConfiguration } from "./api"
 import { AutoApprovalSettings } from "./AutoApprovalSettings"
 import { BrowserSettings } from "./BrowserSettings"
 import { ChatSettings } from "./ChatSettings"
+import { UserInfo } from "./UserInfo"
 import { ChatContent } from "./ChatContent"
 
 export interface WebviewMessage {
@@ -29,9 +30,10 @@ export interface WebviewMessage {
 		| "refreshOpenAiModels"
 		| "openMcpSettings"
 		| "restartMcpServer"
+		| "deleteMcpServer"
 		| "autoApprovalSettings"
 		| "browserSettings"
-		| "chatSettings"
+		| "togglePlanActMode"
 		| "checkpointDiff"
 		| "checkpointRestore"
 		| "taskCompletionViewChanges"
@@ -43,11 +45,14 @@ export interface WebviewMessage {
 		| "accountLoginClicked"
 		| "accountLogoutClicked"
 		| "subscribeEmail"
+		| "authStateChanged"
+		| "authCallback"
 		| "fetchMcpMarketplace"
 		| "downloadMcp"
-		| "openMcpMarketplaceServerDetails"
 		| "silentlyRefreshMcpMarketplace"
 		| "searchCommits"
+		| "showMcpView"
+		| "fetchLatestMcpServersFromHub"
 	// | "relaunchChromeDebugMode"
 	text?: string
 	disabled?: boolean
@@ -66,6 +71,10 @@ export interface WebviewMessage {
 	serverName?: string
 	toolName?: string
 	autoApprove?: boolean
+
+	// For auth
+	user?: UserInfo | null
+	customToken?: string
 }
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse"

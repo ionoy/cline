@@ -13,7 +13,7 @@ import {
 } from "../../../../src/shared/ExtensionMessage"
 import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "../../../../src/shared/combineCommandSequences"
 import { useExtensionState } from "../../context/ExtensionStateContext"
-import { findMatchingResourceOrTemplate } from "../../utils/mcp"
+import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "../../utils/mcp"
 import { vscode } from "../../utils/vscode"
 import { CheckpointControls, CheckpointOverlay } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
@@ -24,6 +24,7 @@ import Thumbnails from "../common/Thumbnails"
 import McpResourceRow from "../mcp/McpResourceRow"
 import McpToolRow from "../mcp/McpToolRow"
 import { highlightMentions } from "./TaskHeader"
+import CreditLimitError from "./CreditLimitError"
 import { CheckmarkControl } from "../common/CheckmarkControl"
 
 const ChatRowContainer = styled.div`
@@ -100,7 +101,7 @@ const ChatRow = memo(
 export default ChatRow
 
 export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifiedMessage, isLast }: ChatRowContentProps) => {
-	const { mcpServers } = useExtensionState()
+	const { mcpServers, mcpMarketplaceCatalog } = useExtensionState()
 
 	const [seeNewChangesDisabled, setSeeNewChangesDisabled] = useState(false)
 
@@ -201,9 +202,12 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 								marginBottom: "-1.5px",
 							}}></span>
 					),
-					<span style={{ color: normalColor, fontWeight: "bold" }}>
+					<span style={{ color: normalColor, fontWeight: "bold", wordBreak: "break-word" }}>
 						Cline wants to {mcpServerUse.type === "use_mcp_tool" ? "use a tool" : "access a resource"} on the{" "}
-						<code>{mcpServerUse.serverName}</code> MCP server:
+						<code style={{ wordBreak: "break-all" }}>
+							{getMcpServerDisplayName(mcpServerUse.serverName, mcpMarketplaceCatalog)}
+						</code>{" "}
+						MCP server:
 					</span>,
 				]
 			case "completion_result":
@@ -249,31 +253,31 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 					) : (
 						<ProgressIndicator />
 					),
-					apiReqCancelReason != null ? (
-						apiReqCancelReason === "user_cancelled" ? (
-							<span
-								style={{
-									color: normalColor,
-									fontWeight: "bold",
-								}}>
-								API Request Cancelled
-							</span>
-						) : (
-							<span
-								style={{
-									color: errorColor,
-									fontWeight: "bold",
-								}}>
-								API Streaming Failed
-							</span>
-						)
-					) : cost != null ? (
-						<span style={{ color: normalColor, fontWeight: "bold" }}>API Request</span>
-					) : apiRequestFailedMessage ? (
-						<span style={{ color: errorColor, fontWeight: "bold" }}>API Request Failed</span>
-					) : (
-						<span style={{ color: normalColor, fontWeight: "bold" }}>API Request...</span>
-					),
+					(() => {
+						if (apiReqCancelReason != null) {
+							return apiReqCancelReason === "user_cancelled" ? (
+								<span style={{ color: normalColor, fontWeight: "bold" }}>API Request Cancelled</span>
+							) : (
+								<span style={{ color: errorColor, fontWeight: "bold" }}>API Streaming Failed</span>
+							)
+						}
+
+						if (cost != null) {
+							return <span style={{ color: normalColor, fontWeight: "bold" }}>API Request</span>
+						}
+
+						if (apiRequestFailedMessage) {
+							// const errorData = parseErrorText(apiRequestFailedMessage)
+							// if (errorData) {
+							// 	if (errorData.code === "insufficient_credits") {
+							// 		return <span style={{ color: errorColor, fontWeight: "bold" }}>Credit Limit Reached</span>
+							// 	}
+							// }
+							return <span style={{ color: errorColor, fontWeight: "bold" }}>API Request Failed</span>
+						}
+
+						return <span style={{ color: normalColor, fontWeight: "bold" }}>API Request...</span>
+					})(),
 				]
 			case "followup":
 				return [
@@ -733,29 +737,55 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 							</div>
 							{((cost == null && apiRequestFailedMessage) || apiReqStreamingFailedMessage) && (
 								<>
-									<p
-										style={{
-											...pStyle,
-											color: "var(--vscode-errorForeground)",
-										}}>
-										{apiRequestFailedMessage || apiReqStreamingFailedMessage}
-										{apiRequestFailedMessage?.toLowerCase().includes("powershell") && (
-											<>
-												<br />
-												<br />
-												It seems like you're having Windows PowerShell issues, please see this{" "}
-												<a
-													href="https://github.com/cline/cline/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22"
-													style={{
-														color: "inherit",
-														textDecoration: "underline",
-													}}>
-													troubleshooting guide
-												</a>
-												.
-											</>
-										)}
-									</p>
+									{(() => {
+										// Try to parse the error message as JSON for credit limit error
+										const errorData = parseErrorText(apiRequestFailedMessage)
+										if (errorData) {
+											if (
+												errorData.code === "insufficient_credits" &&
+												typeof errorData.current_balance === "number" &&
+												typeof errorData.total_spent === "number" &&
+												typeof errorData.total_promotions === "number" &&
+												typeof errorData.message === "string"
+											) {
+												return (
+													<CreditLimitError
+														currentBalance={errorData.current_balance}
+														totalSpent={errorData.total_spent}
+														totalPromotions={errorData.total_promotions}
+														message={errorData.message}
+													/>
+												)
+											}
+										}
+
+										// Default error display
+										return (
+											<p
+												style={{
+													...pStyle,
+													color: "var(--vscode-errorForeground)",
+												}}>
+												{apiRequestFailedMessage || apiReqStreamingFailedMessage}
+												{apiRequestFailedMessage?.toLowerCase().includes("powershell") && (
+													<>
+														<br />
+														<br />
+														It seems like you're having Windows PowerShell issues, please see this{" "}
+														<a
+															href="https://github.com/cline/cline/wiki/TroubleShooting-%E2%80%90-%22PowerShell-is-not-recognized-as-an-internal-or-external-command%22"
+															style={{
+																color: "inherit",
+																textDecoration: "underline",
+															}}>
+															troubleshooting guide
+														</a>
+														.
+													</>
+												)}
+											</p>
+										)
+									})()}
 
 									{/* {apiProvider === "" && (
 											<div
@@ -1273,3 +1303,20 @@ const Markdown = memo(({ markdown }: { markdown?: string }) => {
 		</div>
 	)
 })
+
+function parseErrorText(text: string | undefined) {
+	if (!text) {
+		return undefined
+	}
+	try {
+		const startIndex = text.indexOf("{")
+		const endIndex = text.lastIndexOf("}")
+		if (startIndex !== -1 && endIndex !== -1) {
+			const jsonStr = text.substring(startIndex, endIndex + 1)
+			const errorObject = JSON.parse(jsonStr)
+			return errorObject
+		}
+	} catch (e) {
+		// Not JSON or missing required fields
+	}
+}

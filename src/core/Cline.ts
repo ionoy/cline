@@ -9,9 +9,7 @@ import * as path from "path"
 import { serializeError } from "serialize-error"
 import * as vscode from "vscode"
 import { ApiHandler, buildApiHandler } from "../api"
-import { OpenAiHandler } from "../api/providers/openai"
 import { OpenRouterHandler } from "../api/providers/openrouter"
-import { ApiStream } from "../api/transform/stream"
 import CheckpointTracker from "../integrations/checkpoints/CheckpointTracker"
 import { DIFF_VIEW_URI_SCHEME, DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { findToolName, formatContentBlockToMarkdown } from "../integrations/misc/export-markdown"
@@ -58,6 +56,9 @@ import { parseMentions } from "./mentions"
 import { formatResponse } from "./prompts/responses"
 import { addUserInstructions, SYSTEM_PROMPT } from "./prompts/system"
 import { getNextTruncationRange, getTruncatedMessages } from "./sliding-window"
+import { OpenAiHandler } from "../api/providers/openai"
+import { ApiStream } from "../api/transform/stream"
+import { ClineHandler } from "../api/providers/cline"
 import { ClineProvider, GlobalFileNames } from "./webview/ClineProvider"
 
 const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) ?? path.join(os.homedir(), "Desktop") // may or may not exist but fs checking existence would immediately ask for permission which would be bad UX, need to come up with a better solution
@@ -354,15 +355,17 @@ export class Cline {
 					break
 			}
 
-			// Set isCheckpointCheckedOut flag on the message
-			// Find all checkpoint messages before this one
-			const checkpointMessages = this.clineMessages.filter((m) => m.say === "checkpoint_created")
-			const currentMessageIndex = checkpointMessages.findIndex((m) => m.ts === messageTs)
+			if (restoreType !== "task") {
+				// Set isCheckpointCheckedOut flag on the message
+				// Find all checkpoint messages before this one
+				const checkpointMessages = this.clineMessages.filter((m) => m.say === "checkpoint_created")
+				const currentMessageIndex = checkpointMessages.findIndex((m) => m.ts === messageTs)
 
-			// Set isCheckpointCheckedOut to false for all checkpoint messages
-			checkpointMessages.forEach((m, i) => {
-				m.isCheckpointCheckedOut = i === currentMessageIndex
-			})
+				// Set isCheckpointCheckedOut to false for all checkpoint messages
+				checkpointMessages.forEach((m, i) => {
+					m.isCheckpointCheckedOut = i === currentMessageIndex
+				})
+			}
 
 			await this.saveClineMessages()
 
@@ -1368,7 +1371,7 @@ export class Cline {
 			yield firstChunk.value
 			this.isWaitingForFirstChunk = false
 		} catch (error) {
-			const isOpenRouter = this.api instanceof OpenRouterHandler
+			const isOpenRouter = this.api instanceof OpenRouterHandler || this.api instanceof ClineHandler
 			if (isOpenRouter && !this.didAutomaticallyRetryFailedApiRequest) {
 				console.log("first chunk failed, waiting 1 second before retrying")
 				await delay(1000)
@@ -3152,7 +3155,6 @@ export class Cline {
 			try {
 				for await (const chunk of stream) {
 					if (!chunk) {
-						// Sometimes chunk is undefined, no idea that can cause it, but this workaround seems to fix it
 						continue
 					}
 					switch (chunk.type) {

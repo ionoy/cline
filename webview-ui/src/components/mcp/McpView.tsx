@@ -7,6 +7,8 @@ import McpToolRow from "./McpToolRow"
 import McpResourceRow from "./McpResourceRow"
 import McpMarketplaceView from "./marketplace/McpMarketplaceView"
 import styled from "styled-components"
+import { getMcpServerDisplayName } from "../../utils/mcp"
+import DangerButton from "../common/DangerButton"
 
 type McpViewProps = {
 	onDone: () => void
@@ -22,6 +24,7 @@ const McpView = ({ onDone }: McpViewProps) => {
 
 	useEffect(() => {
 		vscode.postMessage({ type: "silentlyRefreshMcpMarketplace" })
+		vscode.postMessage({ type: "fetchLatestMcpServersFromHub" })
 	}, [])
 
 	// const [servers, setServers] = useState<McpServer[]>([
@@ -170,14 +173,11 @@ const McpView = ({ onDone }: McpViewProps) => {
 										flexDirection: "column",
 										alignItems: "center",
 										gap: "12px",
-										marginTop: "20px",
+										marginTop: 20,
+										marginBottom: 20,
 										color: "var(--vscode-descriptionForeground)",
 									}}>
-									<div>No MCP servers installed yet</div>
-									<VSCodeButton appearance="primary" onClick={() => setActiveTab("marketplace")}>
-										<span className="codicon codicon-cloud-download" style={{ marginRight: "6px" }} />
-										Browse Marketplace
-									</VSCodeButton>
+									No MCP servers installed
 								</div>
 							)}
 
@@ -238,7 +238,10 @@ const TabButton = ({ children, isActive, onClick }: { children: React.ReactNode;
 
 // Server Row Component
 const ServerRow = ({ server }: { server: McpServer }) => {
+	const { mcpMarketplaceCatalog } = useExtensionState()
+
 	const [isExpanded, setIsExpanded] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
 
 	const getStatusColor = () => {
 		switch (server.status) {
@@ -264,6 +267,14 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 		})
 	}
 
+	const handleDelete = () => {
+		setIsDeleting(true)
+		vscode.postMessage({
+			type: "deleteMcpServer",
+			serverName: server.name,
+		})
+	}
+
 	return (
 		<div style={{ marginBottom: "10px" }}>
 			<div
@@ -280,7 +291,18 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 				{!server.error && (
 					<span className={`codicon codicon-chevron-${isExpanded ? "down" : "right"}`} style={{ marginRight: "8px" }} />
 				)}
-				<span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{server.name}</span>
+				<span
+					style={{
+						flex: 1,
+						overflow: "hidden",
+						wordBreak: "break-all",
+						whiteSpace: "normal",
+						display: "flex",
+						alignItems: "center",
+						marginRight: "4px",
+					}}>
+					{getMcpServerDisplayName(server.name, mcpMarketplaceCatalog)}
+				</span>
 				<div style={{ display: "flex", alignItems: "center", marginRight: "8px" }} onClick={(e) => e.stopPropagation()}>
 					<div
 						role="switch"
@@ -448,6 +470,17 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 							}}>
 							{server.status === "connecting" ? "Restarting..." : "Restart Server"}
 						</VSCodeButton>
+
+						<DangerButton
+							// appearance="secondary"
+							onClick={handleDelete}
+							disabled={isDeleting}
+							style={{
+								width: "calc(100% - 14px)",
+								margin: "5px 7px 3px 7px",
+							}}>
+							{isDeleting ? "Deleting..." : "Delete Server"}
+						</DangerButton>
 					</div>
 				)
 			)}
